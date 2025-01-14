@@ -5,3 +5,4 @@ itk>=5.2.0
 vtk>=9.0.0
 PySide6>=6.0.0
 openpyxl
+matplotlib~=3.9.4

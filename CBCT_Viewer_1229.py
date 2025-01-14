@@ -1895,6 +1895,7 @@ class MainWindow(QMainWindow):
         #取图像中心坐标
         self.center = [0] * 3
         self.flipped_image.GetCenter(self.center)
+        print(self.center)
         
         self.reslice.SetInterpolationModeToLinear()
         self.reslice.SetOutputSpacing(1, 1, 1)
