@@ -2401,7 +2401,6 @@ class MainWindow(QMainWindow):
         point = self.rotate_coordinate(x,y,z, -angle_x, -angle_y, -angle_z, True)
         #某点处在已经旋转过的画面下。现在先将其根据角度逆转回到原始坐标系，再将其转到关键点坐标系
         #与三维映射毫不干涉
-        print(f"111{point}")
         pos = self.rotate_coordinate(point[0],point[1],point[2],
                                 self.euler_angles[0],
                                 self.euler_angles[1],
@@ -2412,12 +2411,10 @@ class MainWindow(QMainWindow):
         #slice_pos = np.array(self.calculate_position_in_key_coordinates(self, x,y,z, angle_x, angle_y, angle_z))
         
     def update_physical_position_label(self, x, y, z, display = True):
-        #position = np.array(self.image_position_patient) + np.array([x * self.pixel_spacing, y * self.pixel_spacing, z * self.slice_thickness])
-        #position = np.array([(self.width - 1 - x) * self.slice_thickness, y * self.slice_thickness, z * self.slice_thickness]) - self.origin_physical
         slice_pos = np.array([x,y,z])-self.origin_physical
         position = [x * self.slice_thickness for x in slice_pos ]
         if display:
-            self.physical_position_label.setText(f"Physical Position: ({position[1]:.2f}, {position[0]:.2f}, {position[2]:.2f})")
+            self.physical_position_label.setText(f"Physical Position: ({position[0]:.2f}, {position[1]:.2f}, {position[2]:.2f})")
         pos = (position[0],position[1], position[2])
         return pos
     
@@ -2776,23 +2773,24 @@ class MainWindow(QMainWindow):
     
     def set_physical_origin(self):
         self.set_origin_button.setStyleSheet("color: green;")
-
-        self.origin_physical = [self.x_input.value(), self.y_input.value(), self.z_input.value()]
+        self.origin_physical= self.calculate_position_in_key_coordinates(self.SR[1][0],
+                                                           self.SR[1][1],
+                                                           self.SR[1][2],
+                                                           self.SR[2][0],
+                                                           self.SR[2][1],
+                                                           self.SR[2][2])
         print(f"origin_physical:{self.origin_physical}")
-        #self.origin_physical = [(- self.origin[0])*self.slice_thickness, self.origin[1] * self.slice_thickness, self.origin[2]*self.slice_thickness]
-        self.update_physical_position_label(self.x_input.value(),self.y_input.value(),self.z_input.value())
+        self.update_physical_position_label(self.origin_physical[0],self.origin_physical[1],self.origin_physical[2])
 
        
-    def rotate_coordinate(self, x,y,z, angle_x,angle_y,angle_z, reverse_turn = False):
-
-        P = np.array([x, y, z])
-
-        # Convert angles from degrees to radians
+    def rotate_coordinate(self, x, y, z, angle_x, angle_y, angle_z, reverse_turn=False):
+        """旋转坐标点"""
+        # 将角度从度转换为弧度
         angle_x = np.radians(angle_x)
         angle_y = np.radians(angle_y)
         angle_z = np.radians(angle_z)
 
-        # Rotation matrices for each axis
+        # 绕X、Y、Z轴的旋转矩阵
         R_x = np.array([
             [1, 0, 0],
             [0, np.cos(angle_x), -np.sin(angle_x)],
@@ -2811,24 +2809,21 @@ class MainWindow(QMainWindow):
             [0, 0, 1]
         ])
 
-        # Original point as a vector
+        # 组合旋转矩阵
+        R = R_x @ R_y @ R_z
+        R = R.transpose()
+
+        # 原始点向量
         original_vector = np.array([x, y, z])
 
-        R = R_z @ R_y @ R_x
+        # 将点平移到原点
+        translated_point = original_vector - self.center
 
-        # Translate point to origin
-        translated_point =  original_vector + self.center
+        # 旋转点
+        rotated_point = R @ translated_point
 
-        rotated_point = np.dot(R , P)
-
-        # Apply rotations
-        # if reverse_turn:
-        #     rotated_point = np.dot(R_x, np.dot(R_y, np.dot(R_z, translated_point)))
-        # else:
-        #     rotated_point = np.dot(R_z, np.dot(R_y, np.dot(R_x, translated_point)))
-
-        # Translate point back to center
-        new_point = rotated_point - self.center
+        # 将点平移回中心
+        new_point = rotated_point + self.center
 
         return new_point
 
@@ -2898,12 +2893,12 @@ class MainWindow(QMainWindow):
         return mirrored_vector
             
     def set_coordinate_system(self):
-        if self.AODA is not None and self.ANS is not None and self.HtL is not None and self.HtR is not None and self.SR is not None:
+        if self.AODA is not None and self.ANS is not None and self.HtR is not None and self.HtL is not None and self.SR is not None:
             #AODA和ANS: AB HtL和HtR: CD
             #首先将所有点换算到统一坐标系
             points = []#(angle_x, angle_y, angle_z)
             
-            key_points = [self.AODA, self.ANS, self.HtL, self.HtR, self.SR]
+            key_points = [self.AODA, self.ANS, self.HtR, self.HtL, self.SR]
             for (name, (x,y,z), (angle_x, angle_y, angle_z), (phy_x,phy_y,phy_z))  in key_points:
                 pos = self.rotate_coordinate(x,y,z, 
                                          angle_x, 
@@ -2911,36 +2906,27 @@ class MainWindow(QMainWindow):
                                          angle_z, True)
                 points.append((pos[0],pos[1],pos[2]))
 
-            vector_AB = np.array([points[0][0] - points[1][0], points[0][1] - points[1][1], points[0][2] - points[1][2]])
-            vector_CD = np.array([points[2][0] - points[3][0], points[2][1] - points[3][1], points[2][2] - points[3][2]])
-            vector_AB= -vector_AB
+            vector_AB = np.array([points[1][0] - points[0][0], points[1][1] - points[0][1], points[1][2] - points[0][2]])
+            vector_CD = np.array([points[3][0] - points[2][0], points[3][1] - points[2][1], points[3][2] - points[2][2]])
 
-            print(vector_AB)
-            print(vector_CD)
+            # print(vector_AB, vector_CD)
 
-            vector_axial = np.cross(vector_AB, vector_CD) #水平面的法向量
-            vector_coronal = np.cross(vector_CD, vector_axial) #冠状面的法向量
-            #vector_sagittal = vector_CD# 经证明 CD实际上就是正中矢状面的法向量
-            vector_sagittal = np.cross(vector_coronal, vector_axial)
+            vector_axial = self.normalize_vector(np.cross(vector_AB, vector_CD))  # 水平面的法向量,新z轴
+            vector_coronal = self.normalize_vector(np.cross(vector_CD, vector_axial))  # 冠状面的法向量，新y轴
+            vector_sagittal = self.normalize_vector(np.cross(vector_coronal, vector_axial))  # 矢状面的法向量，新x轴
 
-            # 归一化向量
-            vector_axial = self.normalize_vector(vector_axial)
-            vector_coronal = self.normalize_vector(vector_coronal)
-            vector_sagittal = self.normalize_vector(vector_sagittal)
-
-            print(vector_axial)
-            print(vector_coronal)
-            print(vector_sagittal)
+            # print(vector_sagittal)
+            # print(vector_coronal)
+            # print(vector_axial)
 
             # 计算旋转矩阵
             rotation_matrix = self.rotation_matrix_from_vectors(vector_sagittal, vector_coronal, vector_axial)
-            rotation_matrix = rotation_matrix.transpose()
-            print(f"rotation_matrix\n{rotation_matrix}")
+            # print(f"rotation_matrix\n{rotation_matrix}")
 
             # 从旋转矩阵计算欧拉角
             euler_angles = self.euler_angles_from_rotation_matrix(rotation_matrix)
             self.euler_angles = euler_angles
-            print(f"euler_angles\n{self.euler_angles}")
+            # print(f"euler_angles\n{self.euler_angles}")
 
             # self.revised_coordinate_angles = euler_angles
             print(f"Input coordinates: ({self.SR[1][0]}, {self.SR[1][1]}, {self.SR[1][2]})")
@@ -2953,19 +2939,17 @@ class MainWindow(QMainWindow):
                                                                self.SR[2][2])
             #设置坐标系后，将现在视图调至坐标原点，将现在视图角度校正为坐标系方向
 
-            # point = (self.SR[1][0],self.SR[1][1],self.SR[1][2],self.SR[2][0],self.SR[2][1],self.SR[2][2])
+            print(point)
 
-            print(f"Output point: {point}")
-        
-            self.x_input.setValue(point[0])
-            self.y_input.setValue(point[1])
-            self.z_input.setValue(point[2])
-
+            # 此处对新的物理原点的世界坐标取整，目的是展现在交互输入框上
+            self.x_input.setValue(int(point[0]))
+            self.y_input.setValue(int(point[1]))
+            self.z_input.setValue(int(point[2]))
 
             self.rotate_x_input.setValue(euler_angles[0])
             self.rotate_y_input.setValue(euler_angles[1])
             self.rotate_z_input.setValue(euler_angles[2])
-            
+
             if(self.coords_plane_display):
                self.coordinate_planes_switch()
                
@@ -2986,9 +2970,8 @@ class MainWindow(QMainWindow):
             for (name, (x,y,z), (angle_x, angle_y, angle_z), (phy_x,phy_y,phy_z)) in key_points:
                 slice_pos = (x,y,z)
                 angles = (angle_x, angle_y, angle_z)
-                #angles 
                 pos = self.calculate_position_in_key_coordinates(x, y, z, angle_x, angle_y, angle_z)
-                print(f"111{pos}")
+                print(pos)
                 physicals = self.update_physical_position_label(pos[0],pos[1],pos[2],False)
                 PT = (name, slice_pos, angles, physicals)
                 if name == "AODA":
@@ -3000,7 +2983,6 @@ class MainWindow(QMainWindow):
                 elif name == "HtL":
                     self.HtL = PT
                 elif name == "SR":
-                    # PT = (name, slice_pos, angles, (0,0,0)) #不严谨的做法
                     self.SR = PT
                 self.key_points.append(PT)
                 
@@ -3024,100 +3006,33 @@ class MainWindow(QMainWindow):
         rotation_matrix = np.column_stack((v1, v2, v3))
         return rotation_matrix
 
-    # def euler_angles_from_rotation_matrix(self, matrix):
-    #     # 从旋转矩阵计算欧拉角
-    #     sy = np.sqrt(matrix[0, 0] * matrix[0, 0] + matrix[1, 0] * matrix[1, 0])
-    #
-    #     singular = sy < 1e-6
-    #
-    #     if not singular:
-    #         x = np.arctan2(matrix[2, 1], matrix[2, 2])
-    #         y = np.arctan2(-matrix[2, 0], sy)
-    #         z = np.arctan2(matrix[1, 0], matrix[0, 0])
-    #     else:
-    #         x = np.arctan2(-matrix[1, 2], matrix[1, 1])
-    #         y = np.arctan2(-matrix[2, 0], sy)
-    #         z = 0
-    #     x = (np.degrees(x) + 360) % 360
-    #     y = (np.degrees(y) + 360) % 360
-    #     z = (np.degrees(z) + 360) % 360
-    #
-    #     return x,y,z
-
-    # def euler_angles_from_rotation_matrix(self, matrix):
-    #     """
-    #     从旋转矩阵计算欧拉角（ZYX 顺序）。
-    #
-    #     参数:
-    #         matrix (np.array): 3x3 旋转矩阵。
-    #
-    #     返回:
-    #         tuple: 欧拉角 (x, y, z)，单位为度，范围在 [-180, 180]。
-    #     """
-    #     # 确保矩阵是 3x3
-    #     assert matrix.shape == (3, 3), "旋转矩阵必须是 3x3 的矩阵"
-    #
-    #     # 计算 Pitch (y)
-    #     sy = np.sqrt(matrix[0, 0] * matrix[0, 0] + matrix[1, 0] * matrix[1, 0])
-    #     singular = sy < 1e-6
-    #
-    #     if not singular:
-    #         # 非奇异情况
-    #         x = np.arctan2(matrix[2, 1], matrix[2, 2])  # Roll (x)
-    #         y = np.arctan2(-matrix[2, 0], sy)  # Pitch (y)
-    #         z = np.arctan2(matrix[1, 0], matrix[0, 0])  # Yaw (z)
-    #     else:
-    #         # 奇异情况（万向节锁）
-    #         x = np.arctan2(-matrix[1, 2], matrix[1, 1])  # Roll (x)
-    #         y = np.arctan2(-matrix[2, 0], sy)  # Pitch (y)
-    #         z = 0  # Yaw (z)
-    #
-    #     # 将弧度转换为角度，并限制在 [-180, 180] 范围内
-    #     x = np.degrees(x)
-    #     y = np.degrees(y)
-    #     z = np.degrees(z)
-    #
-    #     # 将角度限制在 [-180, 180] 范围内
-    #     x = (x + 180) % 360
-    #     y = (y + 180) % 360 - 180
-    #     z = (z + 180) % 360
-    #
-    #     return x, y, z
-
     def euler_angles_from_rotation_matrix(self,matrix):
-        """
-        从旋转矩阵中提取 ZYX 顺序的欧拉角。
+        """从旋转矩阵计算欧拉角"""
+        # 计算y角
+        y = np.arctan2(matrix[0, 2], np.sqrt(matrix[0, 0] ** 2 + matrix[0, 1] ** 2))
 
-        参数:
-            matrix (np.array): 3x3 旋转矩阵。
-
-        返回:
-            tuple: 欧拉角 (roll, pitch, yaw)，单位为度。
-        """
-        # 确保矩阵是 3x3
-        assert matrix.shape == (3, 3), "旋转矩阵必须是 3x3 的矩阵"
-
-        # 计算 Pitch (θ)
-        sy = np.sqrt(matrix[0, 0] * matrix[0, 0] + matrix[1, 0] * matrix[1, 0])
-        singular = sy < 1e-6
-
-        if not singular:
-            # 非奇异情况
-            roll = np.arctan2(matrix[2, 1], matrix[2, 2])  # Roll (x)
-            pitch = np.arctan2(-matrix[2, 0], sy)  # Pitch (y)
-            yaw = np.arctan2(matrix[1, 0], matrix[0, 0])  # Yaw (z)
+        # 检查是否接近万向锁情况
+        if np.abs(y - np.pi / 2) < 1e-6:
+            # 万向锁情况，y = 90度
+            print("警告：检测到万向锁情况（y = 90度）")
+            z = 0
+            x = np.arctan2(matrix[1, 0], matrix[1, 1])
+        elif np.abs(y + np.pi / 2) < 1e-6:
+            # 万向锁情况，y = -90度
+            print("警告：检测到万向锁情况（y = -90度）")
+            z = 0
+            x = np.arctan2(-matrix[1, 0], -matrix[1, 1])
         else:
-            # 奇异情况（万向节锁）
-            roll = np.arctan2(-matrix[1, 2], matrix[1, 1])  # Roll (x)
-            pitch = np.arctan2(-matrix[2, 0], sy)  # Pitch (y)
-            yaw = 0  # Yaw (z)
+            # 一般情况
+            z = np.arctan2(-matrix[0, 1], matrix[0, 0])
+            x = np.arctan2(-matrix[1, 2], matrix[2, 2])
 
         # 将弧度转换为角度
-        roll = np.degrees(roll)
-        pitch = np.degrees(pitch)
-        yaw = np.degrees(yaw)
+        x = np.degrees(x)
+        y = np.degrees(y)
+        z = np.degrees(z)
 
-        return roll, pitch, yaw
+        return x, y, z
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

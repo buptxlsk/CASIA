@@ -2,12 +2,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pprint import pprint
 
+from numpy.testing.print_coercion_tables import print_new_cast_table
 
 
 class TEST:
     def __init__(self):
-        self.center = np.array([0, 0, 0])
+        # self.center = np.array([383.5, 383.5, 287.5 ])
+        self.center = np.array([0,0,0])
         self.origin_physical = np.array([0, 0, 0])
+        self.origin_world = np.array([0, 0, 0])
         self.slice_thickness = 1
         self.euler_angles = [0]*3
         self.PT = []
@@ -100,7 +103,8 @@ class TEST:
         return new_point
 
     def update_physical_position_label(self, x, y, z):
-        slice_pos = np.array([x,y,z])-self.origin_physical
+        # slice_pos = np.array([x,y,z])-self.origin_physical
+        slice_pos = np.array([x,y,z])-self.origin_world
         position = [x * self.slice_thickness for x in slice_pos ]
         pos = (position[0],position[1], position[2])
         return pos
@@ -181,12 +185,19 @@ class TEST:
 
     def set_coordinate_system(self):
         """设置坐标系"""
+        # key_points = [
+        #     ('a', (389, 371, 225), (0, 0, 0), (0, 0, 0)),
+        #     ('b', (380, 649, 199), (0, 0, 0), (0, 0, 0)),
+        #     ('c', (281, 359, 303), (0, 0, 0), (0, 0, 0)),
+        #     ('d', (509, 366, 303), (0, 0, 0), (0, 0, 0)),
+        #     ('s', (387, 440, 269), (0, 0, 0), (0, 0, 0)),
+        # ]
         key_points = [
-            ('a', (389, 371, 225), (0, 0, 0), (0, 0, 0)),
-            ('b', (380, 649, 199), (0, 0, 0), (0, 0, 0)),
-            ('c', (281, 359, 303), (0, 0, 0), (0, 0, 0)),
-            ('d', (509, 366, 303), (0, 0, 0), (0, 0, 0)),
-            ('s', (387, 440, 269), (0, 0, 0), (0, 0, 0)),
+            ('a', (1, 2, 3), (0, 0, 0), (0, 0, 0)),
+            ('b', (2, 3, 4), (0, 0, 0), (0, 0, 0)),
+            ('c', (4, 5, 6), (0, 0, 0), (0, 0, 0)),
+            ('d', (4, 5, 7), (0, 0, 0), (0, 0, 0)),
+            ('s', (3, 4, 6), (0, 0, 0), (0, 0, 0)),
         ]
 
         # 此处作用存疑
@@ -194,18 +205,22 @@ class TEST:
                   for (name, (x, y, z), (angle_x, angle_y, angle_z), (phy_x, phy_y, phy_z)) in key_points]
 
 
+        self.origin_world = points[4]
+
         # 计算向量AB和CD
         vector_AB = points[1] - points[0]
         vector_CD = points[3] - points[2]
+
+        # print(vector_AB, vector_CD)
 
         # 计算水平面、冠状面和矢状面的法向量
         self.vector_axial = self.normalize_vector(np.cross(vector_AB, vector_CD))  # 水平面的法向量,新z轴
         self.vector_coronal = self.normalize_vector(np.cross(vector_CD, self.vector_axial))  # 冠状面的法向量，新y轴
         self.vector_sagittal = self.normalize_vector(np.cross(self.vector_coronal, self.vector_axial))  # 矢状面的法向量，新x轴
 
-        print(self.vector_sagittal)
-        print(self.vector_coronal)
-        print(self.vector_axial)
+        # print(self.vector_sagittal)
+        # print(self.vector_coronal)
+        # print(self.vector_axial)
 
         # 构建旋转矩阵
         rotation_matrix = self.rotation_matrix_from_vectors(self.vector_sagittal, self.vector_coronal, self.vector_axial)
@@ -219,19 +234,21 @@ class TEST:
         self.origin_physical = self.calculate_position_in_key_coordinates(points[4][0],points[4][1],points[4][2],0,0,0)
         print(f"origin_physical\n{self.origin_physical}\n")
 
+
         # 计算新的物理原点下各个点的物理坐标值
         for (name, (x, y, z), (angle_x, angle_y, angle_z), (phy_x, phy_y, phy_z)) in key_points:
             # 这个是初始世界坐标
             slice_pos = (x, y, z)
             # 这个是初始角度
             angles = (angle_x, angle_y, angle_z)
-            # 计算各个点的新的值
+            # 计算各个点在物理坐标系下的世界坐标系值
             pos = self.calculate_position_in_key_coordinates(x, y, z, angle_x, angle_y, angle_z)
-            # 计算各个点相对新物理原点的值,即为新的物理坐标值(*切片厚度的情况下)
+            # 计算物理坐标系下各个点相对物理原点的值,即为新的物理坐标值(*切片厚度的情况下)
             physicals = self.update_physical_position_label(pos[0], pos[1], pos[2])
             pt = (name, slice_pos, angles, physicals)
             self.PT.append(pt)
 
+        pprint(self.PT)
 
 
 def main():
@@ -239,7 +256,7 @@ def main():
     # 创建 TEST 类的实例
     test_instance = TEST()
     test_instance.set_coordinate_system()
-    test_instance.view()
+    # test_instance.view()
 
 if __name__ == "__main__":
     main()
