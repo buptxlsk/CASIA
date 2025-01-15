@@ -17,6 +17,11 @@ class TEST:
         self.vector_axial = ()
         self.vector_coronal = ()
         self.vector_sagittal = ()
+        self.a = None
+        self.b = None
+        self.c = None
+        self.d = None
+        self.s = None
 
     def euler_angles_from_rotation_matrix(self,matrix):
         """从旋转矩阵计算欧拉角"""
@@ -103,8 +108,7 @@ class TEST:
         return new_point
 
     def update_physical_position_label(self, x, y, z):
-        # slice_pos = np.array([x,y,z])-self.origin_physical
-        slice_pos = np.array([x,y,z])-self.origin_world
+        slice_pos = np.array([x,y,z])-self.origin_physical
         position = [x * self.slice_thickness for x in slice_pos ]
         pos = (position[0],position[1], position[2])
         return pos
@@ -185,26 +189,27 @@ class TEST:
 
     def set_coordinate_system(self):
         """设置坐标系"""
-        # key_points = [
-        #     ('a', (389, 371, 225), (0, 0, 0), (0, 0, 0)),
-        #     ('b', (380, 649, 199), (0, 0, 0), (0, 0, 0)),
-        #     ('c', (281, 359, 303), (0, 0, 0), (0, 0, 0)),
-        #     ('d', (509, 366, 303), (0, 0, 0), (0, 0, 0)),
-        #     ('s', (387, 440, 269), (0, 0, 0), (0, 0, 0)),
-        # ]
         key_points = [
-            ('a', (1, 2, 3), (0, 0, 0), (0, 0, 0)),
-            ('b', (2, 3, 4), (0, 0, 0), (0, 0, 0)),
-            ('c', (4, 5, 6), (0, 0, 0), (0, 0, 0)),
-            ('d', (4, 5, 7), (0, 0, 0), (0, 0, 0)),
-            ('s', (3, 4, 6), (0, 0, 0), (0, 0, 0)),
+            ('a', (389, 371, 225), (0, 0, 0), (0, 0, 0)),
+            ('b', (380, 649, 199), (0, 0, 0), (0, 0, 0)),
+            ('c', (281, 359, 303), (0, 0, 0), (0, 0, 0)),
+            ('d', (509, 366, 303), (0, 0, 0), (0, 0, 0)),
+            ('s', (387, 440, 269), (0, 0, 0), (0, 0, 0)),
         ]
+        # key_points = [
+        #     ('a', (1, 2, 3), (0, 0, 0), (0, 0, 0)),
+        #     ('b', (2, 3, 4), (0, 0, 0), (0, 0, 0)),
+        #     ('c', (4, 5, 6), (0, 0, 0), (0, 0, 0)),
+        #     ('d', (4, 5, 7), (0, 0, 0), (0, 0, 0)),
+        #     ('s', (3, 4, 6), (0, 0, 0), (0, 0, 0)),
+        # ]
 
         # 此处作用存疑
         points = [self.rotate_coordinate(x, y, z, angle_x, angle_y, angle_z, True)
                   for (name, (x, y, z), (angle_x, angle_y, angle_z), (phy_x, phy_y, phy_z)) in key_points]
 
 
+        # 保留旋转前s点的世界坐标
         self.origin_world = points[4]
 
         # 计算向量AB和CD
@@ -230,12 +235,12 @@ class TEST:
         self.euler_angles = self.euler_angles_from_rotation_matrix(rotation_matrix)
         print(f"euler_angles\n{self.euler_angles}")
 
-        # 设置物理原点，此处初始角度为0，0，0
-        self.origin_physical = self.calculate_position_in_key_coordinates(points[4][0],points[4][1],points[4][2],0,0,0)
+        # 计算旋转后s点的世界坐标
+        self.origin_physical = self.calculate_position_in_key_coordinates(self.origin_world[0], self.origin_world[1],self.origin_world[2],0,0,0)
         print(f"origin_physical\n{self.origin_physical}\n")
 
 
-        # 计算新的物理原点下各个点的物理坐标值
+        # 以转前s点为原点，保留转后的相对关系，求各个点的世界坐标，同时将相对关系存为物理坐标
         for (name, (x, y, z), (angle_x, angle_y, angle_z), (phy_x, phy_y, phy_z)) in key_points:
             # 这个是初始世界坐标
             slice_pos = (x, y, z)
@@ -243,9 +248,21 @@ class TEST:
             angles = (angle_x, angle_y, angle_z)
             # 计算各个点在物理坐标系下的世界坐标系值
             pos = self.calculate_position_in_key_coordinates(x, y, z, angle_x, angle_y, angle_z)
+            print(pos)
             # 计算物理坐标系下各个点相对物理原点的值,即为新的物理坐标值(*切片厚度的情况下)
             physicals = self.update_physical_position_label(pos[0], pos[1], pos[2])
             pt = (name, slice_pos, angles, physicals)
+            if name == "a":
+                self.a = pt
+            elif name == "b":
+                self.b = pt
+            elif name == "c":
+                self.c = pt
+            elif name == "d":
+                self.d = pt
+            elif name == "s":
+                pt = (name, slice_pos, angles, (0,0,0)) #不严谨的做法
+                self.s = pt
             self.PT.append(pt)
 
         pprint(self.PT)
