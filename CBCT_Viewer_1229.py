@@ -1561,6 +1561,7 @@ class MainWindow(QMainWindow):
                 if vtk_image:
                     self.visualize_vtk_image(vtk_image)
 
+
     def load_dicom_files(self, filenames):
         reader = itk.ImageSeriesReader[itk.Image[itk.SS, 3]].New()
         dicom_io = itk.GDCMImageIO.New()

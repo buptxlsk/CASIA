@@ -45,7 +45,14 @@ class StateSnapshot:
 class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
+        self.center = [0] * 3
         self.setWindowTitle("DICOM Viewer with 3D Reconstruction and Slices")
+
+        self.origin_world = None # 记录原始的SR点坐标
+        self.current_viewer = None
+        self.xz_plane_3d_actor = None
+        self.yz_plane_3d_actor = None
+        self.xy_plane_3d_actor = None
 
         #初始化变量，控制监听器是否监听任务。
         self.picking = False #开启三视图点击联动
@@ -360,6 +367,7 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(angle_coronal, 1, 5)
         self.layout.addWidget(angle_sagittal, 4, 2)
 
+
     def init_render_windows(self):
         self.render_window_axial = self.vtk_widget_axial.GetRenderWindow()
         self.render_window_interactor_axial = self.render_window_axial.GetInteractor()
@@ -522,6 +530,7 @@ class MainWindow(QMainWindow):
         self.coronal_viewer.Render()
         self.sagittal_viewer.Render()
 
+
     def update_contrast(self, value):
         self.color_window = value
         self.axial_viewer.SetColorWindow(self.color_window)
@@ -554,7 +563,7 @@ class MainWindow(QMainWindow):
             
             point_name = f"Point {len(self.marked_points) + 1}"
             angle = (self.rotate_x_input.value(), self.rotate_y_input.value(), self.rotate_z_input.value())
-            
+            # no
             physical_pos = self.update_physical_position_label(actual_pos[0], actual_pos[1], actual_pos[2])
             
             self.marked_points.append((point_name, actual_pos, angle, physical_pos))
@@ -581,6 +590,7 @@ class MainWindow(QMainWindow):
         # 恢复正常的鼠标样式并停止捕获事件
         QApplication.restoreOverrideCursor()
         self.erasing = False
+
 
     def erase_marker(self, obj, event):
         if self.erasing:
@@ -637,6 +647,7 @@ class MainWindow(QMainWindow):
 
         cursor = QCursor(pixmap)
         QApplication.setOverrideCursor(cursor)
+
 
     def clear_erase_cursor(self):
         QApplication.restoreOverrideCursor()
@@ -853,8 +864,8 @@ class MainWindow(QMainWindow):
             table.setItem(i, 4, QTableWidgetItem(f"{angle_x:.2f}"))
             table.setItem(i, 5, QTableWidgetItem(f"{angle_y:.2f}"))
             table.setItem(i, 6, QTableWidgetItem(f"{angle_z:.2f}"))
-            table.setItem(i, 8, QTableWidgetItem(f"{phy_x:.2f}"))
-            table.setItem(i, 7, QTableWidgetItem(f"{phy_y:.2f}"))
+            table.setItem(i, 8, QTableWidgetItem(f"{phy_y:.2f}"))
+            table.setItem(i, 7, QTableWidgetItem(f"{phy_x:.2f}"))
             table.setItem(i, 9, QTableWidgetItem(f"{phy_z:.2f}"))
     
         table.cellChanged.connect(lambda row, column: self.save_key_points(table, row, column))
@@ -1557,6 +1568,7 @@ class MainWindow(QMainWindow):
                 if vtk_image:
                     self.visualize_vtk_image(vtk_image)
 
+
     def load_dicom_files(self, filenames):
         reader = itk.ImageSeriesReader[itk.Image[itk.SS, 3]].New()
         dicom_io = itk.GDCMImageIO.New()
@@ -1892,7 +1904,6 @@ class MainWindow(QMainWindow):
         #取图像中心坐标
         self.center = [0] * 3
         self.flipped_image.GetCenter(self.center)
-        print(self.center)
         
         self.reslice.SetInterpolationModeToLinear()
         self.reslice.SetOutputSpacing(1, 1, 1)
@@ -2097,7 +2108,9 @@ class MainWindow(QMainWindow):
         self.axial_viewer.Render()
         self.coronal_viewer.Render()
         self.sagittal_viewer.Render()
-        self.update_physical_position_label(x, y, z)
+        # self.update_physical_position_label(x, y, z)
+        # 这里的作用需要探讨
+        self.update_physical_position_label_plus(x,y,z)
         if self.projection_3d:
             self.show_slice_position_in_3d()
     
@@ -2277,7 +2290,8 @@ class MainWindow(QMainWindow):
         self.z_input.setValue(self.axial_viewer.GetSlice())
         self.y_input.setValue(self.coronal_viewer.GetSlice())
         self.x_input.setValue(self.sagittal_viewer.GetSlice())
-        self.update_physical_position_label(self.x_input.value(), self.y_input.value(), self.z_input.value())
+        # self.update_physical_position_label(self.x_input.value(), self.y_input.value(), self.z_input.value())
+        self.update_physical_position_label_plus(self.x_input.value(), self.y_input.value(), self.z_input.value())
     
 
     def update_inputs_from_image(self):
@@ -2325,6 +2339,7 @@ class MainWindow(QMainWindow):
                 elif obj == self.render_window_interactor_sagittal:
                     self.y_input.setValue(round(world_pos[1]))
                     self.z_input.setValue(round(world_pos[2]))
+                # no
                 self.update_physical_position_label(world_pos[0], world_pos[1], world_pos[2])
                 
     def rotate_x(self, value):
@@ -2409,14 +2424,31 @@ class MainWindow(QMainWindow):
     
     #def calculate_physical_position_in_key_coordinates(self, x,y,z, angle_x, angle_y, angle_z):
         #slice_pos = np.array(self.calculate_position_in_key_coordinates(self, x,y,z, angle_x, angle_y, angle_z))
-        
+
+        # 这个方法要的是转后的世界坐标,返回的是物理坐标
     def update_physical_position_label(self, x, y, z, display = True):
+        #position = np.array(self.image_position_patient) + np.array([x * self.pixel_spacing, y * self.pixel_spacing, z * self.slice_thickness])
+        #position = np.array([(self.width - 1 - x) * self.slice_thickness, y * self.slice_thickness, z * self.slice_thickness]) - self.origin_physical
         slice_pos = np.array([x,y,z])-self.origin_physical
         position = [x * self.slice_thickness for x in slice_pos ]
         if display:
             self.physical_position_label.setText(f"Physical Position: ({position[0]:.2f}, {position[1]:.2f}, {position[2]:.2f})")
         pos = (position[0],position[1], position[2])
         return pos
+
+        # 这个方法接受的是原始坐标，返回的是物理坐标
+    def update_physical_position_label_plus(self, x,y,z, angle_x=0, angle_y=0, angle_z=0,display = True):
+        point = self.rotate_coordinate(x,y,z, -angle_x, -angle_y, -angle_z)
+        pos = self.rotate_coordinate(point[0],point[1],point[2],
+                                self.euler_angles[0],
+                                self.euler_angles[1],
+                                self.euler_angles[2])
+        slice_pos = np.array([pos[0],pos[1],pos[2]])-self.origin_physical
+        position = [x * self.slice_thickness for x in slice_pos ]
+        if display:
+            self.physical_position_label.setText(f"Physical Position: ({position[0]:.2f}, {position[1]:.2f}, {position[2]:.2f})")
+        pos_plus = (position[0],position[1], position[2])
+        return pos_plus
     
     def closeEvent(self, event):
         # Finalize all render windows
@@ -2782,9 +2814,13 @@ class MainWindow(QMainWindow):
         print(f"origin_physical:{self.origin_physical}")
         self.update_physical_position_label(self.origin_physical[0],self.origin_physical[1],self.origin_physical[2])
 
+
        
-    def rotate_coordinate(self, x, y, z, angle_x, angle_y, angle_z, reverse_turn=False):
+    def rotate_coordinate(self, x, y, z, angle_x, angle_y, angle_z,reverse_turn = False):
         """旋转坐标点"""
+
+        self.flipped_image.GetCenter(self.center)
+
         # 将角度从度转换为弧度
         angle_x = np.radians(angle_x)
         angle_y = np.radians(angle_y)
@@ -2827,7 +2863,6 @@ class MainWindow(QMainWindow):
 
         return new_point
 
-    
     def switch_projection_back(self):
         if self.projection_3d_2d:
             self.projection_3d_2d = False
@@ -2899,11 +2934,15 @@ class MainWindow(QMainWindow):
             points = []#(angle_x, angle_y, angle_z)
             
             key_points = [self.AODA, self.ANS, self.HtR, self.HtL, self.SR]
+
+            self.origin_world = [self.SR[1][0], self.SR[1][1], self.SR[1][2]]
+            print (self.origin_world)
+
             for (name, (x,y,z), (angle_x, angle_y, angle_z), (phy_x,phy_y,phy_z))  in key_points:
                 pos = self.rotate_coordinate(x,y,z, 
-                                         angle_x, 
+                                         angle_x,
                                          angle_y,
-                                         angle_z, True)
+                                         angle_z)
                 points.append((pos[0],pos[1],pos[2]))
 
             vector_AB = np.array([points[1][0] - points[0][0], points[1][1] - points[0][1], points[1][2] - points[0][2]])
@@ -2921,36 +2960,25 @@ class MainWindow(QMainWindow):
 
             # 计算旋转矩阵
             rotation_matrix = self.rotation_matrix_from_vectors(vector_sagittal, vector_coronal, vector_axial)
-            # print(f"rotation_matrix\n{rotation_matrix}")
+            print(f"rotation_matrix\n{rotation_matrix}")
 
             # 从旋转矩阵计算欧拉角
             euler_angles = self.euler_angles_from_rotation_matrix(rotation_matrix)
             self.euler_angles = euler_angles
-            # print(f"euler_angles\n{self.euler_angles}")
+            print(f"euler_angles\n{self.euler_angles}")
 
-            # self.revised_coordinate_angles = euler_angles
-            print(f"Input coordinates: ({self.SR[1][0]}, {self.SR[1][1]}, {self.SR[1][2]})")
-            print(f"Input angles: ({self.SR[2][0]}, {self.SR[2][1]}, {self.SR[2][2]})")
-            point = self.calculate_position_in_key_coordinates(self.SR[1][0],
-                                                               self.SR[1][1],
-                                                               self.SR[1][2],
-                                                               self.SR[2][0],
-                                                               self.SR[2][1],
-                                                               self.SR[2][2])
-            #设置坐标系后，将现在视图调至坐标原点，将现在视图角度校正为坐标系方向
 
-            print(point)
-
+            # 设置坐标系后，将现在视图调至坐标原点，将现在视图角度校正为坐标系方向
             # 此处对新的物理原点的世界坐标取整，目的是展现在交互输入框上
-            self.x_input.setValue(int(point[0]))
-            self.y_input.setValue(int(point[1]))
-            self.z_input.setValue(int(point[2]))
+            self.x_input.setValue(self.origin_world[0])
+            self.y_input.setValue(self.origin_world[1])
+            self.z_input.setValue(self.origin_world[2])
 
-            self.rotate_x_input.setValue(euler_angles[0])
+            self.rotate_x_input.setValue(euler_angles[0]+180)
             self.rotate_y_input.setValue(euler_angles[1])
-            self.rotate_z_input.setValue(euler_angles[2])
+            self.rotate_z_input.setValue(180-euler_angles[2])
 
-            if(self.coords_plane_display):
+            if self.coords_plane_display:
                self.coordinate_planes_switch()
                
             vector_axial = self.mirror_vector_yz(vector_axial)
@@ -2962,7 +2990,7 @@ class MainWindow(QMainWindow):
             self.yz_plane_3d_actor = self.add_plane(vector_coronal, points[4])
             self.xz_plane_3d_actor = self.add_plane(vector_sagittal, points[4])
 
-
+            # 此处求出转后的SR并设置为 self.origin_physical
             self.set_physical_origin()
             
             self.key_points.clear()
@@ -2970,9 +2998,7 @@ class MainWindow(QMainWindow):
             for (name, (x,y,z), (angle_x, angle_y, angle_z), (phy_x,phy_y,phy_z)) in key_points:
                 slice_pos = (x,y,z)
                 angles = (angle_x, angle_y, angle_z)
-                pos = self.calculate_position_in_key_coordinates(x, y, z, angle_x, angle_y, angle_z)
-                print(pos)
-                physicals = self.update_physical_position_label(pos[0],pos[1],pos[2],False)
+                physicals = self.update_physical_position_label_plus(x, y, z, angle_x, angle_y, angle_z)
                 PT = (name, slice_pos, angles, physicals)
                 if name == "AODA":
                     self.AODA = PT
@@ -2983,6 +3009,7 @@ class MainWindow(QMainWindow):
                 elif name == "HtL":
                     self.HtL = PT
                 elif name == "SR":
+                    PT = (name, slice_pos, angles, (0, 0, 0))  # 不严谨的做法
                     self.SR = PT
                 self.key_points.append(PT)
                 
@@ -2990,23 +3017,22 @@ class MainWindow(QMainWindow):
             
         else: 
             QMessageBox.information(self,"ERROR", "请确保所有关键点都已经定义（在View中可以查看）")
-            
-        
-    
-        
+
+
+
+
     def normalize_vector(self, vector):
         norm = np.linalg.norm(vector)
-        if norm == 0: 
-           return vector
+        if norm == 0:
+            return vector
         return vector / norm
-    
-    
+
     def rotation_matrix_from_vectors(self, v1, v2, v3):
         # 将归一化向量作为旋转矩阵的列向量
         rotation_matrix = np.column_stack((v1, v2, v3))
         return rotation_matrix
 
-    def euler_angles_from_rotation_matrix(self,matrix):
+    def euler_angles_from_rotation_matrix(self, matrix):
         """从旋转矩阵计算欧拉角"""
         # 计算y角
         y = np.arctan2(matrix[0, 2], np.sqrt(matrix[0, 0] ** 2 + matrix[0, 1] ** 2))

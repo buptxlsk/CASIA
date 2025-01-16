@@ -7,11 +7,11 @@ from numpy.testing.print_coercion_tables import print_new_cast_table
 
 class TEST:
     def __init__(self):
-        # self.center = np.array([383.5, 383.5, 287.5 ])
-        self.center = np.array([0,0,0])
+        self.center = np.array([383.5, 383.5, 287.5 ])
+        # self.center = np.array([0,0,0])
         self.origin_physical = np.array([0, 0, 0])
         self.origin_world = np.array([0, 0, 0])
-        self.slice_thickness = 1
+        self.slice_thickness = 0.3
         self.euler_angles = [0]*3
         self.PT = []
         self.vector_axial = ()
@@ -22,6 +22,7 @@ class TEST:
         self.c = None
         self.d = None
         self.s = None
+        self.t = ('t', (6, 6, 6), (0, 0, 0), (0, 0, 0))
 
     def euler_angles_from_rotation_matrix(self,matrix):
         """从旋转矩阵计算欧拉角"""
@@ -246,10 +247,10 @@ class TEST:
             slice_pos = (x, y, z)
             # 这个是初始角度
             angles = (angle_x, angle_y, angle_z)
-            # 计算各个点在物理坐标系下的世界坐标系值
+            # 计算各个点在转后的世界坐标
             pos = self.calculate_position_in_key_coordinates(x, y, z, angle_x, angle_y, angle_z)
             print(pos)
-            # 计算物理坐标系下各个点相对物理原点的值,即为新的物理坐标值(*切片厚度的情况下)
+            # 计算转后各个点的相对关系,即为新的物理坐标值(*切片厚度的情况下)
             physicals = self.update_physical_position_label(pos[0], pos[1], pos[2])
             pt = (name, slice_pos, angles, physicals)
             if name == "a":
@@ -266,6 +267,9 @@ class TEST:
             self.PT.append(pt)
 
         pprint(self.PT)
+
+
+
 
 
 def main():
