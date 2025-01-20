@@ -8,6 +8,7 @@ from numpy.testing.print_coercion_tables import print_new_cast_table
 class TEST:
     def __init__(self):
         self.center = np.array([383.5, 383.5, 287.5 ])
+        # self.origin_world = np.array([373, 449, 233 ])
         self.origin_world = np.array([387, 440, 269 ])
         self.origin_physical = np.array([0,0,0])
         self.slice_thickness = 0.3
@@ -21,6 +22,8 @@ class TEST:
         self.c = None
         self.d = None
         self.s = None
+
+
 
 
 
@@ -46,9 +49,9 @@ class TEST:
             x = np.arctan2(-matrix[1, 2], matrix[2, 2])
 
         # 将弧度转换为角度
-        x = np.degrees(x)
-        y = np.degrees(y)
-        z = np.degrees(z)
+        x = np.degrees(x) % 360
+        y = np.degrees(y) % 360
+        z = np.degrees(z) % 360
 
         return x, y, z
 
@@ -156,27 +159,31 @@ class TEST:
         point = self.rotate_coordinate(x,y,z, -angle_x, -angle_y, -angle_z)
         print(point)
         pos = self.rotate_coordinate(point[0],point[1],point[2],
+                                     (self.euler_angles[0]+180),
+                                self.euler_angles[1],
+                                     (180-self.euler_angles[2]))
+        print(f'以center为中心的坐标{pos}')
+        pos2 = self.rotate_coordinate(pos[0],pos[1],pos[2],
+                                -(self.euler_angles[0]+180),
+                                -self.euler_angles[1],
+                                -(180-self.euler_angles[2]))
+        pos2 = [round(coord) for coord in pos2]
+        print(f'尝试复原的点结果为：{pos2}')
+        pos3 = self.rotate_coordinate_plus(pos2[0],pos2[1],pos2[2],
                                 self.euler_angles[0],
                                 self.euler_angles[1],
                                 self.euler_angles[2])
-        print(f'以center为中心的坐标{pos}')
-        # pos2 = self.rotate_coordinate(pos[0],pos[1],pos[2],
-        #                         self.euler_angles[0],
-        #                         self.euler_angles[1],
-        #                         self.euler_angles[2])
-        # print(f'尝试复原的点结果为：{pos2}')
-        # pos3 = self.rotate_coordinate_plus(pos2[0],pos2[1],pos2[2],
-        #                         self.euler_angles[0],
-        #                         self.euler_angles[1],
-        #                         self.euler_angles[2])
-        # print(f'再更换旋转中心后得到的坐标为：{pos3}')
-        # slice_pos3 = np.array([pos3[0],pos3[1],pos3[2]])-np.array([387, 440, 269])
-        # position3 = [x * self.slice_thickness for x in slice_pos3 ]
-        # pos_plus = (position3[0],position3[1], position3[2])
-        # print(f'更换后的物理坐标为{pos_plus}')
+        print(f'再更换旋转中心后得到的坐标为：{pos3}')
+        slice_pos3 = np.array([pos3[0],pos3[1],pos3[2]])-self.origin_world
+        position3 = [x * self.slice_thickness for x in slice_pos3 ]
+        pos_plus = (position3[0],position3[1], position3[2])
+        print(f'更换后的物理坐标为{pos_plus}')
 
-
-        slice_pos = np.array([pos[0],pos[1],pos[2]])-self.origin_physical
+        pos = self.rotate_coordinate_plus(pos2[0],pos2[1],pos2[2],
+                                self.euler_angles[0],
+                                self.euler_angles[1],
+                                self.euler_angles[2])
+        slice_pos = np.array([pos[0],pos[1],pos[2]])-self.origin_world
         position = [x * self.slice_thickness for x in slice_pos ]
         pos_plus = (position[0],position[1], position[2])
         return pos_plus
@@ -210,7 +217,7 @@ class TEST:
             ('s', (387, 440, 269), (0, 0, 0), (0, 0, 0)),
         ]
         # key_points = [
-        #     ('a', (376, 382, 164), (0, 0, 0), (0, 0, 0)),
+        #     ('a', (375, 381, 158), (0, 0, 0), (0, 0, 0)),
         #     ('b', (371, 655, 213), (0, 0, 0), (0, 0, 0)),
         #     ('c', (259, 368, 245), (0, 0, 0), (0, 0, 0)),
         #     ('d', (492, 382, 250), (0, 0, 0), (0, 0, 0)),
@@ -246,6 +253,7 @@ class TEST:
 
         # 计算欧拉角
         self.euler_angles = self.euler_angles_from_rotation_matrix(rotation_matrix)
+
         print(f"euler_angles\n{self.euler_angles}")
 
         # 计算旋转后s点的世界坐标
@@ -276,9 +284,6 @@ class TEST:
 
         pprint(self.PT)
 
-        pos = np.array([387,440,269])
-        # pos = np.array([387.11836528,375.36584773,319.23357792])
-        print(f'计算出的物理坐标{self.update_physical_position_label(pos[0],pos[1],pos[2])}')
 
 
 
